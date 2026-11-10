@@ -4,7 +4,7 @@
 # This script sets up the correct environment for building Solana programs
 # using cargo-build-sbf with the platform-tools.
 
-set -e
+set -euo pipefail
 
 # Solana installation paths (prefer /pkg/main, then agave-install, then PATH)
 AGAVE_LOCAL="$HOME/.local/share/solana/install/active_release/bin"
@@ -47,8 +47,8 @@ fi
 # Default to building all programs in the workspace
 if [ $# -eq 0 ]; then
     echo "Building all Solana programs..."
-    cargo build-sbf "${SBF_ARGS[@]}" --workspace "$@"
+    cargo build-sbf "${SBF_ARGS[@]}" --workspace
 else
-    echo "Building with args: $@"
+    echo "Building with args: $*"
     cargo build-sbf "${SBF_ARGS[@]}" "$@"
 fi
