@@ -4,12 +4,12 @@
 # Usage: ./verify-deploy.sh [commit-hash]
 # If no commit hash is provided, uses the current HEAD.
 
-set -e
+set -euo pipefail
 
 export PATH="$HOME/.cargo/bin:$PATH"
 
 PROGRAM_ID="3Ecf8gyRURyrBtGHS1XAVXyQik5PqgDch4VkxrH4ECcr"
-REPO_URL="https://github.com/KarpelesLab/chiefstaker"
+REPO_URL="https://github.com/TibaneLabs/chiefstaker"
 LIBRARY_NAME="chiefstaker"
 
 COMMIT="${1:-$(git rev-parse HEAD)}"
