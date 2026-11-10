@@ -117,6 +117,9 @@ pub enum StakingError {
 
     #[error("Partial unstake would leave remaining stake below pool minimum")]
     RemainingStakeBelowMinimum,
+
+    #[error("Claim residual rewards (ClaimRewards) before staking into this account again")]
+    ResidualRewardsUnclaimed,
 }
 
 impl From<StakingError> for ProgramError {

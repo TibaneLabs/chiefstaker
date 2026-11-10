@@ -225,6 +225,21 @@ pub fn process_stake_on_behalf(
             return Err(StakingError::PendingUnstakeRequestExists.into());
         }
 
+        // A legacy `amount == 0` account stores unpaid residual rewards in
+        // reward_debt (paid by ClaimRewards against pool.total_residual_unpaid,
+        // never part of pool.total_reward_debt). Adding stake on top would
+        // reinterpret that residual as snapshot debt: the residual claim is
+        // lost, future rewards are suppressed, total_reward_debt is debited
+        // for a value it never contained and the reservation in
+        // total_residual_unpaid is stranded. The beneficiary does not sign
+        // StakeOnBehalf, so without this guard anyone could inflict that on a
+        // victim with a dust stake. Require the residual to be claimed first.
+        // Same threshold as ClaimRewards / CloseStakeAccount / CancelUnstake:
+        // sub-lamport dust (< 1 WAD) is not payable and does not block.
+        if user_stake.amount == 0 && user_stake.reward_debt / WAD > 0 {
+            return Err(StakingError::ResidualRewardsUnclaimed.into());
+        }
+
         // Check minimum stake amount on new total
         let new_total = user_stake
             .amount
