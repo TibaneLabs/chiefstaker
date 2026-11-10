@@ -43,6 +43,21 @@ pub fn settle_unstake_accounting<'a>(
     current_time: i64,
     system_program_info: Option<&AccountInfo<'a>>,
 ) -> Result<u64, ProgramError> {
+    // EX-1: fold any unsynced lamports that arrived at the pool PDA since the
+    // last sync into the accumulator BEFORE settling, exactly like Stake /
+    // StakeOnBehalf / CancelUnstake do. Otherwise the exiting position settles
+    // against a stale accumulator and (on a full exit) permanently loses its
+    // share of those rewards. Done here so every exit path (Unstake,
+    // RequestUnstake, legacy CompleteUnstake) gets it; all callers serialize
+    // the pool afterwards. The reward payout computed below is subtracted from
+    // last_synced_lamports and then leaves the pool, so
+    // last_synced_lamports <= (pool lamports - rent minimum) keeps holding.
+    {
+        let rent_exempt_minimum = solana_program::rent::Rent::get()?
+            .minimum_balance(pool_info.data_len());
+        pool.sync_pending_rewards(pool_info.lamports(), rent_exempt_minimum, current_time)?;
+    }
+
     // Capture old reward_debt for total_reward_debt bookkeeping
     let old_reward_debt = user_stake.reward_debt;
 
