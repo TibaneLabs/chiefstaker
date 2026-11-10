@@ -25,6 +25,20 @@ const TAG_STAKING_POOL: &str = "#stakingpool";
 const TAG_CHIEFSTAKER: &str = "#chiefstaker";
 const URL_PREFIX: &str = "https://labs.chiefpussy.com/staking/";
 
+/// Largest index `<= max` (and `<= s.len()`) that lies on a UTF-8 char boundary
+/// of `s`, so truncating there never splits a multibyte codepoint.
+fn floor_char_boundary(s: &str, max: usize) -> usize {
+    if max >= s.len() {
+        return s.len();
+    }
+    let mut end = max;
+    // Index 0 is always a boundary, so this terminates.
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    end
+}
+
 /// Set pool metadata. Permissionless, no instruction args.
 ///
 /// Derives name from the Token 2022 mint's metadata extension:
@@ -87,7 +101,8 @@ pub fn process_set_pool_metadata(
     let full_name = format!("{}{}", token_name, NAME_SUFFIX);
     let name_bytes = if full_name.len() > 64 {
         // Truncate token name to fit, keeping suffix
-        let max_prefix = 64 - NAME_SUFFIX.len();
+        // (on a char boundary, so a multibyte codepoint is never split)
+        let max_prefix = floor_char_boundary(token_name, 64 - NAME_SUFFIX.len());
         let truncated = &token_name.as_bytes()[..max_prefix];
         let mut buf = Vec::with_capacity(64);
         buf.extend_from_slice(truncated);
@@ -97,7 +112,8 @@ pub fn process_set_pool_metadata(
         full_name.into_bytes()
     };
 
-    // Build symbol tag: "#<symbol lowercase>", capped to 32 bytes
+    // Build symbol tag: "#<symbol lowercase>", capped to 32 bytes (on a char
+    // boundary, see the tags fill below)
     let symbol_lower = token_symbol.to_lowercase();
     let symbol_tag = format!("#{}", symbol_lower);
 
@@ -161,7 +177,7 @@ pub fn process_set_pool_metadata(
     let tags_list: [&[u8]; 3] = [
         TAG_STAKING_POOL.as_bytes(),
         TAG_CHIEFSTAKER.as_bytes(),
-        &symbol_tag.as_bytes()[..symbol_tag.len().min(32)],
+        &symbol_tag.as_bytes()[..floor_char_boundary(&symbol_tag, 32)],
     ];
     let mut tag_lengths = [0u8; 8];
     let mut tags_buf = [[0u8; 32]; 8];
