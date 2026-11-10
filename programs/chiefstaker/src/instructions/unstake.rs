@@ -282,8 +282,9 @@ pub fn settle_unstake_accounting<'a>(
 }
 
 /// Close a fully-unstaked user stake account: drain its rent lamports to the
-/// user, zero its data so it can't be re-read as a valid stake, and decrement
-/// the pool member_count if a metadata account is supplied.
+/// user, zero its data, shrink it to zero length and reassign it to the system
+/// program, and decrement the pool member_count if a metadata account is
+/// supplied.
 ///
 /// Mirrors `process_close_stake_account`. The caller must ensure the position is
 /// fully unstaked before calling.
@@ -304,6 +305,13 @@ pub fn close_user_stake_account<'a>(
         let mut stake_data = user_stake_info.try_borrow_mut_data()?;
         stake_data.fill(0);
     }
+
+    // EX-2: fully close the account — shrink it to zero length and hand it back
+    // to the system program. Leaving a zeroed program-owned account around would
+    // let a same-transaction re-fund keep it alive, bricking this owner's stake
+    // PDA forever (Stake / Close would both fail with NotInitialized).
+    user_stake_info.realloc(0, false)?;
+    user_stake_info.assign(&solana_program::system_program::id());
 
     // Decrement member_count on close (metadata PDA is a required account on the
     // close paths; an uninitialized account is tolerated for metadata-less pools).

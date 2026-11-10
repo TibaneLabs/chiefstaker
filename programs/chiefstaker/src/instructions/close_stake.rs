@@ -95,8 +95,16 @@ pub fn process_close_stake_account(
     **user_info.try_borrow_mut_lamports()? += stake_lamports;
 
     // Zero out the account data so it can't be re-read as a valid stake
-    let mut stake_data = user_stake_info.try_borrow_mut_data()?;
-    stake_data.fill(0);
+    {
+        let mut stake_data = user_stake_info.try_borrow_mut_data()?;
+        stake_data.fill(0);
+    }
+
+    // EX-2: fully close the account — shrink it to zero length and hand it back
+    // to the system program, so a same-transaction re-fund cannot leave a
+    // zeroed program-owned account that bricks this owner's stake PDA.
+    user_stake_info.realloc(0, false)?;
+    user_stake_info.assign(&solana_program::system_program::id());
 
     // Decrement member_count on close (metadata PDA is a required account).
     update_pool_member_count(program_id, pool_info, metadata_info, -1)?;

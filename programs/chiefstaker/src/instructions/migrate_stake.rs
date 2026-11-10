@@ -156,6 +156,11 @@ pub fn process_migrate_stake(
         let mut source_data = source_stake_info.try_borrow_mut_data()?;
         source_data.fill(0);
     }
+    // EX-2: fully close the source — shrink it to zero length and hand it back
+    // to the system program, so a same-transaction re-fund cannot leave a
+    // zeroed program-owned account that bricks the source owner's stake PDA.
+    source_stake_info.realloc(0, false)?;
+    source_stake_info.assign(&solana_program::system_program::id());
 
     msg!(
         "Migrated {} tokens from {} to {}",
