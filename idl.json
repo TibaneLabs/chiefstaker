@@ -207,6 +207,12 @@
           "writable": true,
           "signer": true,
           "docs": ["User / owner"]
+        },
+        {
+          "name": "systemProgram",
+          "optional": true,
+          "address": "11111111111111111111111111111111",
+          "docs": ["System program (optional, for legacy account reallocation)"]
         }
       ],
       "args": []
@@ -461,8 +467,9 @@
         },
         {
           "name": "owner",
+          "writable": true,
           "signer": true,
-          "docs": ["User / owner"]
+          "docs": ["User / owner (pays rent for legacy account reallocation)"]
         },
         {
           "name": "systemProgram",
