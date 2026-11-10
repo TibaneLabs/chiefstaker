@@ -208,7 +208,7 @@ pub enum StakingInstruction {
     /// and then revokes the fee sharing authority, making it irreversible.
     ///
     /// Accounts:
-    /// 0. `[]` Pool account (PDA: ["pool", mint])
+    /// 0. `[writable]` Pool account (PDA: ["pool", mint]; CPI signer and payer)
     /// 1. `[]` Token mint
     /// 2. `[]` pfee program
     /// 3. `[]` pfee event authority

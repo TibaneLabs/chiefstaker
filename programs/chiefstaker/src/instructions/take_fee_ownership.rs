@@ -31,8 +31,13 @@ const REVOKE_FEE_SHARING_AUTHORITY_DISC: [u8; 8] = [18, 233, 158, 39, 185, 207, 
 
 /// Take fee ownership: set pool as sole fee recipient and revoke authority.
 ///
+/// None of the passed-through accounts (1..=17) may be the pool's token vault:
+/// the pool PDA signs the CPI and is also the vault's authority, so the vault
+/// must never be handed to the external pfee program.
+///
 /// Accounts (18):
-///  0. `[]`  pool — Pool PDA ["pool", mint], CPI signer
+///  0. `[W]` pool — Pool PDA ["pool", mint], CPI signer. Must be writable: it
+///     is passed to pfee `update_fee_shares` as the (writable) payer.
 ///  1. `[]`  mint — must match pool.mint
 ///  2. `[]`  pfee_program
 ///  3. `[]`  pfee_event_authority — PDA on pfee: ["__event_authority"]
@@ -93,6 +98,15 @@ pub fn process_take_fee_ownership(
     // Verify mint matches pool
     if pool.mint != *mint_info.key {
         return Err(StakingError::InvalidPoolMint.into());
+    }
+
+    // Defence in depth: the pool PDA signs the CPIs below into the external
+    // (upgradeable) pfee program, and that same PDA is the authority of the
+    // staked-token vault. Never let the vault be passed through to it.
+    for passed_through in accounts.iter().take(18).skip(1) {
+        if *passed_through.key == pool.token_vault {
+            return Err(StakingError::InvalidTokenVault.into());
+        }
     }
 
     // Verify pfee program address
