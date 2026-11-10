@@ -41,7 +41,7 @@ use solana_sdk::{
 use spl_token_2022::{
     extension::{
         default_account_state::DefaultAccountState, metadata_pointer::MetadataPointer,
-        non_transferable::NonTransferable, BaseStateWithExtensionsMut, ExtensionType,
+        mint_close_authority::MintCloseAuthority, non_transferable::NonTransferable, BaseStateWithExtensionsMut, ExtensionType,
         StateWithExtensionsMut,
     },
     state::{AccountState, Mint},
@@ -263,6 +263,53 @@ async fn initialize_succeeds_for_metadata_pointer_mint() {
     );
     let (result, mut banks, pool_pda, mint) = try_initialize_pool(mint_data, &authority).await;
     result.expect("InitializePool must succeed for a MetadataPointer mint");
+
+    let pool_acc = banks.get_account(pool_pda).await.unwrap().unwrap();
+    let pool = StakingPool::try_from_slice(&pool_acc.data).unwrap();
+    assert!(pool.is_initialized());
+    assert_eq!(pool.mint, mint);
+}
+
+#[tokio::test]
+async fn initialize_rejects_live_mint_close_authority() {
+    // F2: a set close authority can close the mint at supply 0 and re-create
+    // it at the same address with PermanentDelegate / TransferHook, bypassing
+    // the one-time init screen.
+    let authority = Keypair::new();
+    let close_authority = Pubkey::new_unique();
+    let mint_data = pack_mint_with_extensions(
+        authority.pubkey(),
+        9,
+        &[ExtensionType::MintCloseAuthority],
+        |state| {
+            let ext = state.init_extension::<MintCloseAuthority>(true).unwrap();
+            ext.close_authority = Some(close_authority).try_into().unwrap();
+        },
+    );
+    let (result, mut banks, pool_pda, _) = try_initialize_pool(mint_data, &authority).await;
+    assert_unsupported_extension(result);
+    assert!(
+        banks.get_account(pool_pda).await.unwrap().is_none(),
+        "pool must not have been created"
+    );
+}
+
+#[tokio::test]
+async fn initialize_succeeds_for_revoked_mint_close_authority() {
+    // The extension is present but its authority was revoked (None): the mint
+    // can never be closed, so it must stay allowed.
+    let authority = Keypair::new();
+    let mint_data = pack_mint_with_extensions(
+        authority.pubkey(),
+        9,
+        &[ExtensionType::MintCloseAuthority],
+        |state| {
+            let ext = state.init_extension::<MintCloseAuthority>(true).unwrap();
+            ext.close_authority = None.try_into().unwrap();
+        },
+    );
+    let (result, mut banks, pool_pda, mint) = try_initialize_pool(mint_data, &authority).await;
+    result.expect("InitializePool must succeed when the close authority is None");
 
     let pool_acc = banks.get_account(pool_pda).await.unwrap().unwrap();
     let pool = StakingPool::try_from_slice(&pool_acc.data).unwrap();

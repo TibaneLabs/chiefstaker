@@ -18,6 +18,7 @@ use spl_token_2022::{
     extension::{
         confidential_transfer::ConfidentialTransferMint,
         default_account_state::DefaultAccountState,
+        mint_close_authority::MintCloseAuthority,
         non_transferable::NonTransferable,
         permanent_delegate::PermanentDelegate,
         transfer_fee::TransferFeeConfig,
@@ -141,6 +142,21 @@ pub fn process_initialize_pool(
         if mint_state.get_extension::<ConfidentialTransferMint>().is_ok() {
             msg!("Token 2022 mints with ConfidentialTransfer extension are not supported");
             return Err(StakingError::UnsupportedMintExtension.into());
+        }
+
+        // Reject mints with a LIVE MintCloseAuthority. Token-2022 lets the close
+        // authority close the mint whenever supply is 0; the mint address can
+        // then be re-created with extensions this screen rejects
+        // (PermanentDelegate, TransferHook, ...) while the pool and vault PDAs
+        // still reference it. The screen only runs once, at init, so a mint
+        // that can be swapped out afterwards defeats it. An extension whose
+        // authority has been revoked (None) is harmless — Token-2022 does not
+        // allow a None authority to be set again — and stays allowed.
+        if let Ok(close_ext) = mint_state.get_extension::<MintCloseAuthority>() {
+            if Option::<Pubkey>::from(close_ext.close_authority).is_some() {
+                msg!("Token 2022 mints with an active MintCloseAuthority are not supported");
+                return Err(StakingError::UnsupportedMintExtension.into());
+            }
         }
 
         // Reject mints carrying any extension type this build does not know
