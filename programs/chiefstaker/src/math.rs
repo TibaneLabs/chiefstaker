@@ -29,6 +29,23 @@ pub const E_WAD: u128 = 2_718_281_828_459_045_235;
 /// so we cap at 42 WAD (matching EXP_NEG_ZERO_THRESHOLD) which is well within safe range.
 pub const MAX_EXP_INPUT: u128 = 42_000_000_000_000_000_000;
 
+/// Maximum (now - base_time) / tau ratio (scaled by WAD) at which NEW stake is
+/// accepted (Stake / StakeOnBehalf); above it the caller must run the
+/// permissionless SyncPool crank first.
+///
+/// Deliberately far below MAX_EXP_INPUT. A stake's weight is computed as
+/// `amount * (WAD - exp_neg(ratio) * exp_start_factor / WAD)`, where
+/// exp_start_factor ~ e^ratio * WAD is huge and exp_neg(ratio) ~ e^-ratio * WAD
+/// has only a handful of significant digits left as the ratio approaches 42
+/// (and is exactly 0 from ~41.45). The truncation overstates the weight of a
+/// stake made at a high ratio: ~1% instant weight at ratio 38, ~22% at 40.5,
+/// 100% at >= 41.5 (ideal: 0%), and the next rebase makes that permanent.
+/// At ratio 20, exp_neg still carries ~9 significant digits, bounding the
+/// instant-weight error to ~1e-9 of the staked amount.
+///
+/// Only the stake-time gate uses this; claim/unstake paths keep MAX_EXP_INPUT.
+pub const MAX_STAKE_EXP_INPUT: u128 = 20_000_000_000_000_000_000;
+
 /// Threshold for sum_stake_exp to trigger rebase (near U256 max / 2)
 pub const REBASE_THRESHOLD: U256 = U256([u64::MAX / 2, u64::MAX, u64::MAX, u64::MAX / 2]);
 
@@ -664,5 +681,40 @@ mod tests {
             "weighted average broke: combined={}, sum={}, diff={}",
             w_combined, w_sum, diff
         );
+    }
+
+    /// Instant weight (WAD-scaled fraction of the staked amount) of a stake
+    /// made when (now - base_time) / tau == ratio, evaluated at the same
+    /// instant. Ideal value: 0.
+    fn instant_weight_fraction(ratio_wad: u128) -> u128 {
+        let tau = 1_000_000u64;
+        let now = (ratio_wad * tau as u128 / WAD) as i64;
+        let exp_start_factor = exp_time_ratio(now, tau).unwrap();
+        let amount = 1_000_000_000u64;
+        let w = calculate_user_weighted_stake(amount, exp_start_factor, now, 0, tau).unwrap();
+        w / amount as u128
+    }
+
+    #[test]
+    fn test_stake_gate_bounds_instant_weight() {
+        // C-2: everywhere at or below the stake-time gate, a brand-new stake
+        // has (near) zero weight: less than 1e-8 of the staked amount.
+        assert!(MAX_STAKE_EXP_INPUT < MAX_EXP_INPUT);
+        let mut ratio = 0u128;
+        while ratio <= MAX_STAKE_EXP_INPUT {
+            let frac = instant_weight_fraction(ratio);
+            assert!(
+                frac < WAD / 100_000_000,
+                "instant weight {} too large at ratio {}",
+                frac,
+                ratio
+            );
+            ratio += WAD / 4;
+        }
+
+        // ...whereas near MAX_EXP_INPUT precision collapses, which is why the
+        // stake gate must not use MAX_EXP_INPUT.
+        assert!(instant_weight_fraction(40 * WAD + WAD / 2) > WAD / 10);
+        assert_eq!(instant_weight_fraction(MAX_EXP_INPUT), WAD);
     }
 }

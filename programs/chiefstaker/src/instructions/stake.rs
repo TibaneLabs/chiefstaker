@@ -15,7 +15,7 @@ use spl_token_2022::extension::StateWithExtensions;
 
 use crate::{
     error::StakingError,
-    math::{exp_time_ratio, wad_mul, MAX_EXP_INPUT, U256, WAD},
+    math::{exp_time_ratio, wad_mul, MAX_STAKE_EXP_INPUT, U256, WAD},
     state::{
         create_pda_account, is_valid_token_program, update_pool_member_count, StakingPool,
         UserStake, STAKE_SEED,
@@ -118,13 +118,15 @@ pub fn process_stake(
     // Calculate exp_start_factor for this stake
     let time_since_base = current_time.saturating_sub(pool.base_time);
 
-    // Check if time_since_base / tau would overflow exp_wad.
-    // Require SyncPool first if the ratio exceeds MAX_EXP_INPUT.
+    // Check that time_since_base / tau is small enough for a new stake to be
+    // weighted precisely (and, a fortiori, for exp_wad not to overflow).
+    // Require SyncPool first if the ratio exceeds MAX_STAKE_EXP_INPUT (see
+    // its doc comment: precision collapses well before MAX_EXP_INPUT).
     let ratio_wad = (time_since_base as u128)
         .checked_mul(WAD)
         .ok_or(StakingError::MathOverflow)?
         / (pool.tau_seconds as u128);
-    if ratio_wad > MAX_EXP_INPUT {
+    if ratio_wad > MAX_STAKE_EXP_INPUT {
         return Err(StakingError::PoolRequiresSync.into());
     }
 
