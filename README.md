@@ -79,6 +79,7 @@ Rewards can be deposited directly via instruction or sent to the pool PDA (e.g.,
 | 15 | `TakeFeeOwnership` | Claim pump.fun creator fee revenue for the pool |
 | 16 | `StakeOnBehalf` | Stake tokens on behalf of another user (beneficiary) |
 | 17 | `FixStakeAccount` | Fix a user's corrupted stake account (program upgrade authority only) |
+| 18 | `MigrateStake` | Migrate a stake position to a new owner (1:1; destination must be empty; time/maturity/reward state preserved) |
 
 ## Pool Settings
 
@@ -105,17 +106,29 @@ cargo test
 ## Testing
 
 ```bash
-# Start a local test validator
-./scripts/start-validator.sh --reset
-
-# Deploy the program
-./scripts/deploy-program.sh target/deploy/chiefstaker.so
-
-# Run E2E tests
+# Build, start a local test validator, deploy to it and run the E2E tests
 ./scripts/run-e2e-tests.sh
 ```
 
+`run-e2e-tests.sh` starts its own `solana-test-validator` on `127.0.0.1:8899`, deploys to it and stops it on exit. It passes the local URL and `~/.config/solana/id.json` explicitly to every CLI call and never modifies your global Solana CLI config. (`scripts/setup-cli.sh` is the one script that does point the global CLI config at the local validator; it prints the previous URL so you can restore it.)
+
 CI runs the full E2E suite against a local test validator on every push.
+
+## Deploying (maintainers)
+
+`scripts/deploy-program.sh` upgrades the **production program** on whatever cluster the Solana CLI is configured for; it is not a test helper.
+
+```bash
+./scripts/deploy-program.sh                    # artifact of the latest CI push run on master
+./scripts/deploy-program.sh --run-id <id>      # artifact of a specific CI run
+./scripts/deploy-program.sh --so <path>        # a local .so (skips the CI download)
+```
+
+- CI artifacts are only accepted from successful `push` runs of this repository's `master` branch (pull-request runs do not upload the artifact and are refused). Without `--run-id`, the run's commit must also equal the current `origin/master`. `--allow-unverified-run` turns these checks into warnings.
+- The script prints the sha256 of the `.so`, checks that the local keypair is the upgrade authority, and asks you to type `deploy` before sending anything. `--yes` skips the prompt (automation).
+- `--priority-fee <N>` sets the compute unit price (micro-lamports / CU).
+
+`scripts/publish-idl.sh [--rpc <url>] [--keypair <path>] [--idl <path>] [--yes]` publishes `idl.json` on-chain using a pinned version of `@solana-program/program-metadata`; it asks you to type `publish` first unless `--yes` is given.
 
 ## Verification
 
