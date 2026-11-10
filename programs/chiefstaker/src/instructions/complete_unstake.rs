@@ -7,6 +7,7 @@ use solana_program::{
     entrypoint::ProgramResult,
     msg,
     program::invoke_signed,
+    program_error::ProgramError,
     pubkey::Pubkey,
     sysvar::Sysvar,
 };
@@ -93,6 +94,13 @@ pub fn process_complete_unstake(
     // Verify token vault
     if pool.token_vault != *token_vault_info.key {
         return Err(StakingError::InvalidTokenVault.into());
+    }
+
+    // EX-6: the destination must not be the vault itself. A vault -> vault
+    // self-transfer would debit the position while the tokens stay in the
+    // vault with no way to recover them.
+    if user_token_info.key == token_vault_info.key {
+        return Err(ProgramError::InvalidArgument);
     }
 
     // Load and validate user stake

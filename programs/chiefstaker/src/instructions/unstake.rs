@@ -494,6 +494,13 @@ pub fn process_unstake(
         return Err(StakingError::InvalidTokenVault.into());
     }
 
+    // EX-6: the destination must not be the vault itself. A vault -> vault
+    // self-transfer would debit the position while the tokens stay in the
+    // vault with no way to recover them.
+    if user_token_info.key == token_vault_info.key {
+        return Err(ProgramError::InvalidArgument);
+    }
+
     // Load and validate user stake
     if user_stake_info.owner != program_id {
         return Err(StakingError::InvalidAccountOwner.into());
