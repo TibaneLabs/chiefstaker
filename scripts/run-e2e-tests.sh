@@ -7,8 +7,13 @@
 # 3. Deploys the program
 # 4. Runs TypeScript E2E tests
 # 5. Cleans up
+#
+# The script never reads or modifies the global Solana CLI config
+# (~/.config/solana/cli/config.yml): every CLI call is given the local
+# validator URL and the keypair explicitly, so it cannot deploy to whatever
+# cluster the CLI happens to be configured for.
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -33,13 +38,39 @@ echo "Step 1: Building program..."
 ./scripts/build-sbf.sh
 echo ""
 
+# All CLI calls below target the local test validator explicitly.
+RPC_URL="http://127.0.0.1:8899"
+# The TypeScript suite loads this same keypair as the program authority.
+KEYPAIR="$HOME/.config/solana/id.json"
+if [ ! -f "$KEYPAIR" ]; then
+    echo "ERROR: keypair not found at $KEYPAIR (create one with solana-keygen new)" >&2
+    exit 1
+fi
+
+# Cleanup is installed before the validator starts so that every exit path
+# below (including early failures) stops it.
+VALIDATOR_PID=""
+cleanup() {
+    echo ""
+    echo "Cleaning up..."
+    if [ -n "$VALIDATOR_PID" ]; then
+        kill "$VALIDATOR_PID" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT
+
 # Step 2: Start validator in background
 echo "Step 2: Starting test validator..."
 LEDGER_DIR="$PROJECT_DIR/test-ledger"
 rm -rf "$LEDGER_DIR"
 
-$VALIDATOR_BIN \
+# --mint funds our keypair at genesis; without it the validator would fund
+# whichever keypair the global CLI config points at.
+MINT_ADDRESS=$("$SOLANA_CLI" address --keypair "$KEYPAIR")
+
+"$VALIDATOR_BIN" \
     --ledger "$LEDGER_DIR" \
+    --mint "$MINT_ADDRESS" \
     --rpc-port 8899 \
     --faucet-port 9900 \
     --slots-per-epoch 32 \
@@ -51,34 +82,21 @@ echo "Waiting for validator to start..."
 sleep 5
 
 # Check validator is running
-if ! kill -0 $VALIDATOR_PID 2>/dev/null; then
-    echo "ERROR: Validator failed to start"
+if ! kill -0 "$VALIDATOR_PID" 2>/dev/null; then
+    echo "ERROR: Validator failed to start" >&2
     exit 1
 fi
-
-# Configure CLI
-$SOLANA_CLI config set --url http://localhost:8899 --keypair ~/.config/solana/id.json 2>/dev/null || true
-
-# Function to cleanup
-cleanup() {
-    echo ""
-    echo "Cleaning up..."
-    if [ -n "$VALIDATOR_PID" ]; then
-        kill $VALIDATOR_PID 2>/dev/null || true
-    fi
-}
-trap cleanup EXIT
 
 # Step 3: Deploy program
 echo ""
 echo "Step 3: Deploying program..."
 PROGRAM_SO="$PROJECT_DIR/target/deploy/chiefstaker.so"
 if [ ! -f "$PROGRAM_SO" ]; then
-    echo "ERROR: Program not found at $PROGRAM_SO"
+    echo "ERROR: Program not found at $PROGRAM_SO" >&2
     exit 1
 fi
 
-$SOLANA_CLI program deploy "$PROGRAM_SO"
+"$SOLANA_CLI" program deploy --url "$RPC_URL" --keypair "$KEYPAIR" "$PROGRAM_SO"
 echo ""
 
 # Step 4: Run TypeScript tests
