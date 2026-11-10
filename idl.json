@@ -575,7 +575,8 @@
       "accounts": [
         {
           "name": "pool",
-          "docs": ["Pool account (PDA: [\"pool\", mint])"]
+          "writable": true,
+          "docs": ["Pool account (PDA: [\"pool\", mint]); CPI signer and writable payer"]
         },
         {
           "name": "mint",
@@ -1293,6 +1294,11 @@
       "code": 6037,
       "name": "RemainingStakeBelowMinimum",
       "msg": "Partial unstake would leave remaining stake below pool minimum"
+    },
+    {
+      "code": 6038,
+      "name": "ResidualRewardsUnclaimed",
+      "msg": "Claim residual rewards (ClaimRewards) before staking into this account again"
     }
   ]
 }
