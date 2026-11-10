@@ -5,10 +5,8 @@ use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
     msg,
-    program::invoke_signed,
     pubkey::Pubkey,
     rent::Rent,
-    system_instruction,
     sysvar::Sysvar,
 };
 use spl_token_2022::extension::{BaseStateWithExtensions, PodStateWithExtensions};
@@ -17,7 +15,9 @@ use spl_token_metadata_interface::state::TokenMetadata;
 
 use crate::{
     error::StakingError,
-    state::{PoolMetadata, StakingPool, METADATA_DISCRIMINATOR, METADATA_SEED},
+    state::{
+        create_pda_account, PoolMetadata, StakingPool, METADATA_DISCRIMINATOR, METADATA_SEED,
+    },
 };
 
 const NAME_SUFFIX: &str = " Staking Pool";
@@ -122,29 +122,25 @@ pub fn process_set_pool_metadata(
         }
         existing.member_count
     } else {
-        // Account doesn't exist — create it
+        // Account doesn't exist — create it. Uses the pre-fund-tolerant helper so
+        // a griefer cannot permanently block metadata creation by sending the
+        // deterministic metadata PDA lamports first (plain create_account
+        // requires a zero balance at the destination).
         let rent = Rent::get()?;
-        let metadata_rent = rent.minimum_balance(PoolMetadata::LEN);
         let metadata_seeds = &[
             METADATA_SEED,
             pool_info.key.as_ref(),
             &[metadata_bump],
         ];
 
-        invoke_signed(
-            &system_instruction::create_account(
-                payer_info.key,
-                metadata_info.key,
-                metadata_rent,
-                PoolMetadata::LEN as u64,
-                program_id,
-            ),
-            &[
-                payer_info.clone(),
-                metadata_info.clone(),
-                system_program_info.clone(),
-            ],
-            &[metadata_seeds],
+        create_pda_account(
+            payer_info,
+            metadata_info,
+            system_program_info,
+            program_id,
+            PoolMetadata::LEN,
+            &rent,
+            metadata_seeds,
         )?;
         0
     };
