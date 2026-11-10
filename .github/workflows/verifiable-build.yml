@@ -5,6 +5,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Least privilege: the jobs only need to read the repository.
+permissions:
+  contents: read
+
 # Cancel an in-progress run when a newer one starts for the same ref+event,
 # so pushes don't pile up stale runs competing for runners.
 concurrency:
@@ -18,7 +22,9 @@ jobs:
   e2e-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (v4)
+        with:
+          persist-credentials: false
 
       - name: Install Solana CLI
         run: |
@@ -49,12 +55,12 @@ jobs:
             --log &
           sleep 5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0 (v4)
         with:
           node-version: 20
 
       - name: Install test dependencies
-        run: cd tests/typescript && npm install
+        run: cd tests/typescript && npm ci
 
       - name: Run E2E tests
         run: cd tests/typescript && npm test
@@ -63,13 +69,15 @@ jobs:
     needs: e2e-tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (v4)
+        with:
+          persist-credentials: false
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
 
       - name: Install solana-verify
-        run: cargo install solana-verify --version 0.4.11
+        run: cargo install solana-verify --version 0.4.11 --locked
 
       - name: Build verifiable binary
         run: solana-verify build --library-name chiefstaker
@@ -77,8 +85,12 @@ jobs:
       - name: Print executable hash
         run: solana-verify get-executable-hash target/deploy/chiefstaker.so
 
+      # Never publish the deployable artifact for pull_request runs: PR code
+      # is unreviewed (and may come from a fork), and scripts/deploy-program.sh
+      # downloads this artifact by name.
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (v4)
         with:
           name: chiefstaker-verifiable
           path: target/deploy/chiefstaker.so
