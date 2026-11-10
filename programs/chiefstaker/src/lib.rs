@@ -282,10 +282,10 @@ use solana_security_txt::security_txt;
 #[cfg(not(feature = "no-entrypoint"))]
 security_txt! {
     name: "ChiefStaker",
-    project_url: "https://github.com/KarpelesLab/chiefstaker",
-    contacts: "link:https://github.com/KarpelesLab/chiefstaker/security/advisories",
-    policy: "https://github.com/KarpelesLab/chiefstaker/security/policy",
-    source_code: "https://github.com/KarpelesLab/chiefstaker"
+    project_url: "https://github.com/TibaneLabs/chiefstaker",
+    contacts: "link:https://github.com/TibaneLabs/chiefstaker/security/advisories",
+    policy: "https://github.com/TibaneLabs/chiefstaker/security/policy",
+    source_code: "https://github.com/TibaneLabs/chiefstaker"
 }
 
 /// Program entrypoint

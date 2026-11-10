@@ -4,7 +4,7 @@
 
 If you discover a security vulnerability in ChiefStaker, please report it responsibly through GitHub Security Advisories:
 
-**[Report a vulnerability](https://github.com/KarpelesLab/chiefstaker/security/advisories/new)**
+**[Report a vulnerability](https://github.com/TibaneLabs/chiefstaker/security/advisories/new)**
 
 Please do **not** open a public issue for security vulnerabilities.
 
